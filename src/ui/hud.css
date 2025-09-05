@@ -1,0 +1,43 @@
+.hud-root {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none; /* allow canvas gestures except on buttons */
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  z-index: 10;
+}
+
+.tool-group,
+.save-load,
+.brush-wrap {
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #e6eef7;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.brush-wrap {
+  align-items: center;
+  color: #a8c1d8;
+}
+
+.brush-wrap input[type="range"] {
+  width: 220px;
+}
