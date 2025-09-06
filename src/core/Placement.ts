@@ -22,6 +22,38 @@ export class Placement {
     }
     return true;
   }
+canPlaceWithPadding(id: BuildingId, tx: number, ty: number, padding: number): boolean {
+  const bp = BUILDINGS[id];
+  if (!bp) return false;
+
+  // Footprint must be in-bounds, correct zone, and unoccupied
+  for (let y = 0; y < bp.h; y++) {
+    for (let x = 0; x < bp.w; x++) {
+      const gx = tx + x, gy = ty + y;
+      if (!this.grid.inBounds(gx, gy)) return false;
+      const zone = this.grid.getZone(gx, gy);
+      if (!bp.allowedZones.includes(zone)) return false;
+      if (this.grid.occupancyMap[this.grid.idx(gx, gy)] !== 0) return false;
+    }
+  }
+
+  // Padding ring must be completely empty of other buildings
+  const pad = Math.max(0, padding | 0);
+  if (pad > 0) {
+    const x0 = tx - pad, y0 = ty - pad;
+    const x1 = tx + bp.w - 1 + pad, y1 = ty + bp.h - 1 + pad;
+
+    for (let gy = y0; gy <= y1; gy++) {
+      for (let gx = x0; gx <= x1; gx++) {
+        if (!this.grid.inBounds(gx, gy)) continue;
+        const insideFootprint = gx >= tx && gx < tx + bp.w && gy >= ty && gy < ty + bp.h;
+        if (insideFootprint) continue; // already checked interior is empty
+        if (this.grid.occupancyMap[this.grid.idx(gx, gy)] !== 0) return false;
+      }
+    }
+  }
+  return true;
+}
 
   // ----- Preview (ghost) -----
   previewAt(id: BuildingId, tx: number, ty: number) {

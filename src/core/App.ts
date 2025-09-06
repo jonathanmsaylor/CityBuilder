@@ -19,6 +19,7 @@ import { CameraRig } from "./CameraRig";
 import { Tool, ZoneId } from "../types/types";
 import { Placement } from "./Placement";
 import { BUILDINGS } from "./Buildings";
+import { Spawner } from "./Spawner";
 
 export class App {
   private root: HTMLElement;
@@ -33,6 +34,7 @@ private placement: Placement;
   private overlay: Overlay;
   private paint: PaintService;
   private saveLoad: SaveLoad;
+private spawner!: Spawner;
 
   private ground: Mesh;
   private tool: Tool = { kind: "paint", zone: ZoneId.Residential };
@@ -76,22 +78,26 @@ constructor(root: HTMLElement) {
   const amb = new AmbientLight(0xffffff, 1.0);
   this.scene.add(amb);
 
-  // Placement BEFORE SaveLoad so SaveLoad can serialize buildings
+  // Placement
   this.placement = new Placement(this.grid, this.scene);
+
+  // ✅ Spawner
+  this.spawner = new Spawner(this.grid, this.placement);
 
   // Services
   this.paint = new PaintService(grid, this.overlay);
   this.paint.setRadius(this.brushRadius);
 
-  // Revalidate buildings when zones change
+  // Revalidate buildings when zones change, and ✅ enqueue spawn work
   this.paint.onAfterPaint((minx, miny, maxx, maxy) => {
     this.placement.validateZones(minx, miny, maxx, maxy);
+    this.spawner.enqueueRect(minx, miny, maxx, maxy); // ✅
   });
 
-  // Save/Load (v2 supports buildings)
+  // Save/Load (buildings already included)
   this.saveLoad = new SaveLoad(grid, this.placement);
 
-  // Pointer input (mobile gestures)
+  // Pointer input
   new Input(this.renderer.domElement, {
     onSingleStart: (p) => this.onSingleStart(p.x, p.y),
     onSingleMove: (p) => this.onSingleMove(p.x, p.y),
@@ -112,7 +118,7 @@ constructor(root: HTMLElement) {
     this.rig.zoomBy(zoomScale);
   }, { passive: false });
 
-  // Pointer hover for placement ghost (mouse move without click)
+  // Hover ghost
   this.renderer.domElement.addEventListener("pointermove", (e) => {
     if (this.tool.kind === "place") {
       this.updatePlacePreviewFromScreen(e.clientX, e.clientY);
@@ -127,6 +133,7 @@ constructor(root: HTMLElement) {
 
   this.animate();
 }
+
 
 
 
@@ -271,18 +278,21 @@ private onSingleMove(sx: number, sy: number) {
   private _prevDual: { cx: number; cy: number; d: number } | null = null;
 
 private animate = (time?: number) => {
-  // time is from rAF; fall back if undefined
   const now = time ?? performance.now();
   if (this._lastTime === undefined) this._lastTime = now;
-  const dt = (now - this._lastTime) / 1000; // seconds
+  const dt = (now - this._lastTime) / 1000;
   this._lastTime = now;
 
   // Keyboard camera controls
   this.updateKeyboard(dt);
 
+  // ✅ Slow, periodic auto-spawn
+  this.spawner.update(dt);
+
   this.renderer.render(this.scene, this.rig.camera);
   requestAnimationFrame(this.animate);
 };
+
 private updateKeyboard(dt: number) {
   if (!this.keys || this.keys.size === 0) return;
 
