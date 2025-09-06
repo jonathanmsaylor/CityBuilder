@@ -1,4 +1,5 @@
 // src/ui/hud.ts
+// UPDATED: add "Workers: A/B"
 import { App } from "../core/App";
 import { ZoneId } from "../types/types";
 
@@ -26,6 +27,7 @@ export function initHUD(app: App) {
     <div class="stats">
       <span id="rations">Rations: 0.0</span>
       <span id="pop">Pop: 0</span>
+      <span id="workers">Workers: 0/0</span>
     </div>
   `;
 
@@ -45,15 +47,14 @@ export function initHUD(app: App) {
   (document.getElementById("load")!).onclick = () => app.load();
 
   // Throttled updater (every ~200ms)
-  let acc = 0;
-  function tick(time: number) {
-    acc += 16;
-    if (acc >= 200) {
-      acc = 0;
-      const r = document.getElementById("rations")!;
-      const p = document.getElementById("pop")!;
-      r.textContent = `Rations: ${app.getRations().toFixed(1)}`;
-      p.textContent = `Pop: ${app.getPopulation()}`;
+  let last = 0;
+  function tick(ts: number) {
+    if (ts - last >= 200) {
+      last = ts;
+      (document.getElementById("rations")!).textContent = `Rations: ${app.getRations().toFixed(1)}`;
+      (document.getElementById("pop")!).textContent = `Pop: ${app.getPopulation()}`;
+      (document.getElementById("workers")!).textContent =
+        `Workers: ${app.getWorkersAssigned()}/${app.getWorkersNeeded()}`;
     }
     requestAnimationFrame(tick);
   }

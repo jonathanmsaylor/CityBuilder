@@ -1,4 +1,5 @@
 // src/core/App.ts
+// UPDATED: wire Jobs + Pathing; expose worker counters to HUD
 import {
   AmbientLight,
   Color,
@@ -23,6 +24,7 @@ import { BUILDINGS } from "./Buildings";
 import { Spawner } from "./Spawner";
 import { Resources } from "./Resources";
 import { initHUD } from "../ui/hud";
+import { Jobs } from "./Jobs";
 
 export class App {
   private root: HTMLElement;
@@ -46,6 +48,7 @@ export class App {
 
   private spawner!: Spawner;
   private resources!: Resources;
+  private jobs!: Jobs;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -91,6 +94,9 @@ export class App {
 
     // Spawner (gated by resources)
     this.spawner = new Spawner(this.grid, this.placement, this.resources);
+
+    // Jobs (workers, movement, farm production)
+    this.jobs = new Jobs(this.grid, this.placement, this.resources, this.scene);
 
     // Services
     this.paint = new PaintService(grid, this.overlay);
@@ -148,6 +154,8 @@ export class App {
   // --- HUD accessors ---
   getRations() { return this.resources.getRations(); }
   getPopulation() { return this.resources.getPopulation(); }
+  getWorkersAssigned() { return this.jobs.getWorkersAssigned(); }
+  getWorkersNeeded() { return this.jobs.getWorkersNeeded(); }
 
   // --- Tooling ---
   setTool(tool: Tool) {
@@ -164,14 +172,14 @@ export class App {
 
   save() {
     this.saveLoad.save();
-    this.resources.save(); // store rations alongside
+    this.resources.save();
   }
 
   load() {
     if (this.saveLoad.load()) {
       this.overlay.refreshAll();
     }
-    this.resources.load(); // reapply rations; pop re-derives from buildings
+    this.resources.load();
   }
 
   // --- Sizing ---
@@ -308,7 +316,8 @@ export class App {
     this._lastTime = now;
 
     this.updateKeyboard(dt);
-    this.resources.update(dt); // rations/pop
+    this.resources.update(dt); // consumption + pop
+    this.jobs.update(dt);      // workers, paths, farm production
     this.spawner.update(dt);   // gated hut spawning
 
     this.renderer.render(this.scene, this.rig.camera);

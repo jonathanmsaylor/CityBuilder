@@ -27,13 +27,15 @@ export class Spawner {
   maxIdleTicks = 12;
 
   /** Which building to spawn for each zone ID. */
-  private zoneToBuilding: Record<number, BuildingId | null> = {
-    [ZoneId.Empty]: null,
-    [ZoneId.Residential]: "ResidentialHut",
-    [ZoneId.Market]: "MarketStall",
-    [ZoneId.Road]: null,
-    [ZoneId.Agriculture]: null, // farms are player-placed, not auto-spawned
-  };
+// src/core/Spawner.ts
+private zoneToBuilding: Record<number, BuildingId | null> = {
+  [ZoneId.Empty]: null,
+  [ZoneId.Residential]: "ResidentialHut",
+  [ZoneId.Market]: null,       // was "MarketStall" → disable auto-spawn for now
+  [ZoneId.Road]: null,
+  [ZoneId.Agriculture]: null,  // farms are placed by you, not auto
+};
+
 
   constructor(
     private grid: Grid,
@@ -66,46 +68,58 @@ export class Spawner {
   }
 
   /** Tick: attempt one placement somewhere in the oldest job, then re-enqueue it. */
-  update(dt: number) {
-    this.timer += dt;
-    if (this.timer < this.interval) return;
-    this.timer = 0;
+// src/core/Spawner.ts
+update(dt: number) {
+  this.timer += dt;
+  if (this.timer < this.interval) return;
+  this.timer = 0;
 
-    if (this.queue.length === 0) return;
-    const job = this.queue.shift()!;
+  if (this.queue.length === 0) return;
+  const job = this.queue.shift()!;
 
-    let placed = false;
-    for (let i = 0; i < this.attemptsPerTick; i++) {
-      const tx = (Math.random() * (job.x1 - job.x0 + 1) + job.x0) | 0;
-      const ty = (Math.random() * (job.y1 - job.y0 + 1) + job.y0) | 0;
+  let placed = false;
+  let gated = false;
 
-      const zid = this.grid.getZone(tx, ty);
-      const bId = this.zoneToBuilding[zid];
-      if (!bId) continue;
+  for (let i = 0; i < this.attemptsPerTick; i++) {
+    const tx = (Math.random() * (job.x1 - job.x0 + 1) + job.x0) | 0;
+    const ty = (Math.random() * (job.y1 - job.y0 + 1) + job.y0) | 0;
 
-      // Food gate: only allow new huts if resources permit
-      if (bId === "ResidentialHut" && this.resources && !this.resources.canSpawnNewHut()) {
-        continue;
-      }
+    const zid = this.grid.getZone(tx, ty);
+    const bId = this.zoneToBuilding[zid];
+    if (!bId) continue;
 
-      const bp = BUILDINGS[bId];
-      const ox = tx - (bp.w >> 1);
-      const oy = ty - (bp.h >> 1);
-
-      if (!this.placement.canPlaceWithPadding(bId, ox, oy, this.padding)) continue;
-
-      if (this.placement.tryPlace(bId, ox, oy)) {
-        placed = true;
-        break; // one per tick
-      }
+    // 🔸 If hut is blocked by the food gate, don't penalize this job.
+    if (bId === "ResidentialHut" && this.resources && !this.resources.canSpawnNewHut()) {
+      gated = true;
+      break; // stop trying for now; requeue intact
     }
 
-    if (placed) {
-      job.idleTicks = 0;
-      this.queue.push(job);
-    } else {
-      job.idleTicks++;
-      if (job.idleTicks < this.maxIdleTicks) this.queue.push(job);
+    const bp = BUILDINGS[bId];
+    const ox = tx - (bp.w >> 1);
+    const oy = ty - (bp.h >> 1);
+
+    if (!this.placement.canPlaceWithPadding(bId, ox, oy, this.padding)) continue;
+
+    if (this.placement.tryPlace(bId, ox, oy)) {
+      placed = true;
+      break; // one placement per tick
     }
   }
+
+  if (gated) {
+    // Resource gate: keep the job alive with no idle penalty
+    this.queue.push(job);
+    return;
+  }
+
+  if (placed) {
+    job.idleTicks = 0;
+    this.queue.push(job);
+  } else {
+    job.idleTicks++;
+    if (job.idleTicks < this.maxIdleTicks) this.queue.push(job);
+    // else: truly full → retire
+  }
+}
+
 }
