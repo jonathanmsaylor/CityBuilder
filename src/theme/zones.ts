@@ -1,22 +1,16 @@
 // src/theme/zones.ts
 import { ZoneId, ZoneRegistry } from "../types/types";
 
-// Helper: convert hex to RGBA bytes with a glassy alpha by default
-function hexToRGBA(hex: string, a = 72) {
+// Return byte RGBA
+function hexToRGBA(hex: string, a = 96) {
   const m = hex.replace("#", "");
   const r = parseInt(m.slice(0, 2), 16);
   const g = parseInt(m.slice(2, 4), 16);
   const b = parseInt(m.slice(4, 6), 16);
-  return { r, g, b, a }; // 0..255 each
+  return { r, g, b, a };
 }
 
-/**
- * Frutiger Aero theme:
- * - Residential: glassy lime (vivid, slightly neon)
- * - Market: royal-aero blue (bright azure)
- * - Road: frosted silver
- * Tweak the alpha (a) if you want more/less glass.
- */
+// Simple, slightly transparent tints (no special effects)
 export const ZONES: ZoneRegistry = {
   [ZoneId.Empty]: {
     id: ZoneId.Empty,
@@ -26,19 +20,16 @@ export const ZONES: ZoneRegistry = {
   [ZoneId.Residential]: {
     id: ZoneId.Residential,
     name: "Residential",
-    // Lime / Aero green
-    color: hexToRGBA("#7CFF6B", 78),
+    color: hexToRGBA("#7CFF6B", 96), // lime green ~38% opacity
   },
   [ZoneId.Market]: {
     id: ZoneId.Market,
     name: "Market",
-    // Royal-aero blue (bright azure)
-    color: hexToRGBA("#2F7BFF", 82),
+    color: hexToRGBA("#2F7BFF", 96), // royal/azure blue ~38% opacity
   },
   [ZoneId.Road]: {
     id: ZoneId.Road,
     name: "Road",
-    // Frosted silver
-    color: hexToRGBA("#C9D6E8", 60),
+    color: hexToRGBA("#A3A3A3", 64), // gentle gray
   },
 };

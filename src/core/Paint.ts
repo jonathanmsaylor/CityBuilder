@@ -1,12 +1,13 @@
+// src/core/Paint.ts
 import { Grid } from "./Grid";
-import { ZoneId } from "../types/types";
 import { Overlay } from "./Overlay";
+import { ZoneId } from "../types/types";
+import { ZONES } from "../theme/zones";
 
 export class PaintService {
   private grid: Grid;
   private overlay: Overlay;
-
-  brushRadius = 2;
+  private brushRadius = 2; // tiles
 
   constructor(grid: Grid, overlay: Overlay) {
     this.grid = grid;
@@ -14,79 +15,84 @@ export class PaintService {
   }
 
   setRadius(r: number) {
-    this.brushRadius = Math.max(1, Math.min(12, Math.floor(r)));
+    this.brushRadius = Math.max(1, Math.floor(r));
   }
 
-  // Paint a filled disc centered at tile (cx, cy)
-  private paintDisc(cx: number, cy: number, zone: ZoneId) {
-    const r = this.brushRadius;
-    const r2 = r * r;
-    const minx = Math.max(0, cx - r);
-    const maxx = Math.min(this.grid.width - 1, cx + r);
-    const miny = Math.max(0, cy - r);
-    const maxy = Math.min(this.grid.height - 1, cy + r);
-    for (let y = miny; y <= maxy; y++) {
-      for (let x = minx; x <= maxx; x++) {
-        const dx = x - cx;
-        const dy = y - cy;
-        if (dx * dx + dy * dy <= r2) {
-          this.grid.setZone(x, y, zone);
+  /**
+   * Stroke a line in tile space from A→B, painting zone IDs and
+   * stamping a soft circular brush in the supersampled overlay.
+   */
+  strokeLine(ax: number, ay: number, bx: number, by: number, zone: ZoneId) {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const dist = Math.hypot(dx, dy);
+
+    // Dense resample to avoid gaps; spacing in tiles
+    const spacingTiles = 0.35;
+    const steps = Math.max(1, Math.floor(dist / spacingTiles));
+
+    // Track dirty rect in tile space for placement callbacks
+    let minx = this.grid.width,
+      miny = this.grid.height,
+      maxx = -1,
+      maxy = -1;
+
+    const rTiles = this.brushRadius;
+    const r2 = rTiles * rTiles;
+
+    const zcol = ZONES[zone]?.color ?? ZONES[ZoneId.Empty].color;
+    const ss = this.overlay.supersample;
+    const radiusPx = rTiles * ss;
+    const featherPx = Math.max(1, Math.round(0.75 * ss)); // soft edge
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const cx = Math.round(ax + dx * t);
+      const cy = Math.round(ay + dy * t);
+
+      // 1) Logic: write zone IDs to tiles within a circle
+      for (let y = cy - rTiles; y <= cy + rTiles; y++) {
+        for (let x = cx - rTiles; x <= cx + rTiles; x++) {
+          if (!this.grid.inBounds(x, y)) continue;
+          const ddx = x - cx,
+            ddy = y - cy;
+          if (ddx * ddx + ddy * ddy <= r2) {
+            this.grid.setZone(x, y, zone);
+            if (x < minx) minx = x;
+            if (y < miny) miny = y;
+            if (x > maxx) maxx = x;
+            if (y > maxy) maxy = y;
+          }
         }
       }
+
+// 2) Visual: soft disc (paint or erase) in supersampled overlay
+const world = this.grid.tileCenterToWorld(cx, cy);
+const { px, py } = this.overlay.worldToOverlayPx(world.x, world.z);
+
+if (zone === ZoneId.Empty) {
+  // Eraser: fade out alpha smoothly
+  this.overlay.eraseSoftDisc(px, py, radiusPx, featherPx);
+} else {
+  // Paint: blend color in with proper alpha
+  this.overlay.paintSoftDisc(px, py, radiusPx, zcol, featherPx);
+}
+
+    }
+
+    // Upload only the dirty rows we touched
+    this.overlay.updateAfterPaint();
+
+    // Optional callback (used by Placement to revalidate)
+    const cb = (this as any)._afterPaint as
+      | ((minx: number, miny: number, maxx: number, maxy: number) => void)
+      | undefined;
+    if (cb && maxx >= minx && maxy >= miny) {
+      cb(minx, miny, maxx, maxy);
     }
   }
 
-  // Sample along the line from (ax,ay) to (bx,by) at ~0.5 tile spacing
-strokeLine(ax: number, ay: number, bx: number, by: number, zone: ZoneId) {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const dist = Math.hypot(dx, dy);
-
-  // Brush spacing factor: lower = denser, smoother; higher = lighter, faster
-  const spacing = 0.35; // try 0.25 for very smooth, 0.5 for faster but rougher
-  const steps = Math.max(1, Math.floor(dist / spacing));
-
-  // Track dirty rect
-  let minx = this.grid.width, miny = this.grid.height, maxx = -1, maxy = -1;
-
-for (let i = 0; i <= steps; i++) {
-  const t = i / steps;
-  const cx = Math.round(ax + dx * t);
-  const cy = Math.round(ay + dy * t);
-
-  // Draw circular brush by checking distance
-  const r = this.brushRadius;
-  const r2 = r * r;
-  for (let y = cy - r; y <= cy + r; y++) {
-    for (let x = cx - r; x <= cx + r; x++) {
-      if (!this.grid.inBounds(x, y)) continue;
-      const ddx = x - cx, ddy = y - cy;
-      if (ddx * ddx + ddy * ddy <= r2) {
-        this.grid.setZone(x, y, zone);
-      }
-    }
+  onAfterPaint(fn: (minx: number, miny: number, maxx: number, maxy: number) => void) {
+    (this as any)._afterPaint = fn;
   }
-
-  if (cx - r < minx) minx = cx - r;
-  if (cy - r < miny) miny = cy - r;
-  if (cx + r > maxx) maxx = cx + r;
-  if (cy + r > maxy) maxy = cy + r;
-}
-
-
-  this.overlay.updateAfterPaint();
-
-  const cb = (this as any)._afterPaint as
-    | ((minx: number, miny: number, maxx: number, maxy: number) => void)
-    | undefined;
-  if (cb && maxx >= minx && maxy >= miny) {
-    cb(minx, miny, maxx, maxy);
-  }
-}
-
-onAfterPaint(fn: (minx: number, miny: number, maxx: number, maxy: number) => void) {
-  // Store without changing class fields to keep the edit surgical
-  (this as any)._afterPaint = fn;
-}
-
 }
