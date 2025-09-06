@@ -45,7 +45,6 @@ constructor(root: HTMLElement) {
   this.root = root;
 
   this.scene = new Scene();
-  // keep your current sky if you changed it earlier
   this.scene.background = new Color(0x87ceeb);
 
   this.renderer = new WebGLRenderer({ antialias: false, alpha: false });
@@ -57,7 +56,7 @@ constructor(root: HTMLElement) {
   this.rig = new CameraRig(window.innerWidth / window.innerHeight);
   this.rig.setViewportHeight(window.innerHeight);
 
-  // Ground + overlay (unchanged from your current version)
+  // Ground
   const grid = (this.grid = new Grid(128, 128));
   const geom = new PlaneGeometry(grid.width, grid.height, 1, 1);
   geom.rotateX(-Math.PI / 2);
@@ -69,18 +68,28 @@ constructor(root: HTMLElement) {
   this.ground = new Mesh(geom, mat);
   this.scene.add(this.ground);
 
+  // Overlay
   this.overlay = new Overlay(grid);
-
   this.scene.add(this.overlay.mesh);
-this.placement = new Placement(this.grid, this.scene);
 
+  // Light
   const amb = new AmbientLight(0xffffff, 1.0);
   this.scene.add(amb);
+
+  // Placement BEFORE SaveLoad so SaveLoad can serialize buildings
+  this.placement = new Placement(this.grid, this.scene);
 
   // Services
   this.paint = new PaintService(grid, this.overlay);
   this.paint.setRadius(this.brushRadius);
-  this.saveLoad = new SaveLoad(grid);
+
+  // Revalidate buildings when zones change
+  this.paint.onAfterPaint((minx, miny, maxx, maxy) => {
+    this.placement.validateZones(minx, miny, maxx, maxy);
+  });
+
+  // Save/Load (v2 supports buildings)
+  this.saveLoad = new SaveLoad(grid, this.placement);
 
   // Pointer input (mobile gestures)
   new Input(this.renderer.domElement, {
@@ -89,27 +98,37 @@ this.placement = new Placement(this.grid, this.scene);
     onSingleEnd: () => this.onSingleEnd(),
     onDualStart: () => {},
     onDualMove: (p1, p2) => this.onDualMove(p1.x, p1.y, p2.x, p2.y),
-    onDualEnd: () => {
-      this._prevDual = null;
-    },
+    onDualEnd: () => { this._prevDual = null; },
   });
 
-  // Keyboard input (DEV): listen on window
+  // Keyboard
   window.addEventListener("keydown", this.onKeyDown);
   window.addEventListener("keyup", this.onKeyUp);
+
+  // Mouse wheel zoom (DEV)
+  this.renderer.domElement.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const zoomScale = e.deltaY < 0 ? 0.9 : 1.1;
+    this.rig.zoomBy(zoomScale);
+  }, { passive: false });
+
+  // Pointer hover for placement ghost (mouse move without click)
+  this.renderer.domElement.addEventListener("pointermove", (e) => {
+    if (this.tool.kind === "place") {
+      this.updatePlacePreviewFromScreen(e.clientX, e.clientY);
+    }
+  }, { passive: true });
+  this.renderer.domElement.addEventListener("pointerleave", () => {
+    if (this.tool.kind === "place") this.placement.hidePreview();
+  });
 
   window.addEventListener("resize", () => this.onResize());
   this.onResize();
 
   this.animate();
-  // Mouse wheel zoom (DEV)
-this.renderer.domElement.addEventListener("wheel", (e) => {
-  e.preventDefault();
-  const zoomScale = e.deltaY < 0 ? 0.9 : 1.1; // scroll up = zoom in, scroll down = zoom out
-  this.rig.zoomBy(zoomScale);
-}, { passive: false });
-
 }
+
+
 
 private onKeyDown = (e: KeyboardEvent) => {
   // Avoid hijacking input fields
@@ -125,9 +144,22 @@ private onKeyUp = (e: KeyboardEvent) => {
 };
 
 
-  setTool(tool: Tool) {
-    this.tool = tool;
+setTool(tool: Tool) {
+  this.tool = tool;
+  if (tool.kind !== "place") {
+    this.placement.hidePreview();
   }
+}
+
+private updatePlacePreviewFromScreen(sx: number, sy: number) {
+  if (this.tool.kind !== "place") return;
+  const tile = this.screenToTile(sx, sy);
+  if (!tile) {
+    this.placement.hidePreview();
+    return;
+  }
+  this.placement.previewAt(this.tool.id, tile.x, tile.y);
+}
 
   setBrushRadius(r: number) {
     this.brushRadius = r;
@@ -186,22 +218,29 @@ private onSingleStart(sx: number, sy: number) {
   }
 
   if (this.tool.kind === "place") {
-    // one-tap placement; if invalid, do nothing (we can add a red preview later)
     this.placement.tryPlace(this.tool.id, tile.x, tile.y);
+    // Refresh ghost right where you tapped (reflects new occupancy validity)
+    this.placement.previewAt(this.tool.id, tile.x, tile.y);
     this.lastTile = null;
     return;
   }
 }
 
 
-  private onSingleMove(sx: number, sy: number) {
-    if (!this.lastTile) return;
-    const tile = this.screenToTile(sx, sy);
-    if (!tile) return;
-    const zone = this.tool.kind === "erase" ? ZoneId.Empty : (this.tool as any).zone ?? ZoneId.Residential;
-    this.paint.strokeLine(this.lastTile.x, this.lastTile.y, tile.x, tile.y, zone);
-    this.lastTile = tile;
+
+private onSingleMove(sx: number, sy: number) {
+  if (this.tool.kind === "place") {
+    this.updatePlacePreviewFromScreen(sx, sy);
+    return;
   }
+  if (!this.lastTile) return;
+  const tile = this.screenToTile(sx, sy);
+  if (!tile) return;
+  const zone = this.tool.kind === "erase" ? ZoneId.Empty : (this.tool as any).zone ?? ZoneId.Residential;
+  this.paint.strokeLine(this.lastTile.x, this.lastTile.y, tile.x, tile.y, zone);
+  this.lastTile = tile;
+}
+
 
   private onSingleEnd() {
     this.lastTile = null;
