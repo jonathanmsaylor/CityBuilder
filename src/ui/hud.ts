@@ -11,8 +11,10 @@ export function createHUD() {
   const btnMkt = mkButton("Market", "mkt");
   const btnRoad = mkButton("Road", "road");
   const btnErase = mkButton("Eraser", "eraser");
+const btnPlaceHut = mkButton("Place Hut", "phut");
+const btnPlaceStall = mkButton("Place Stall", "pstall");
 
-  toolGroup.append(btnRes, btnMkt, btnRoad, btnErase);
+toolGroup.append(btnRes, btnMkt, btnRoad, btnErase, btnPlaceHut, btnPlaceStall);
 
   const brushWrap = document.createElement("div");
   brushWrap.className = "brush-wrap";
@@ -42,6 +44,8 @@ export function createHUD() {
   btnMkt.addEventListener("click", () => onTool({ kind: "paint", zone: ZoneId.Market }));
   btnRoad.addEventListener("click", () => onTool({ kind: "paint", zone: ZoneId.Road }));
   btnErase.addEventListener("click", () => onTool({ kind: "erase" }));
+btnPlaceHut.addEventListener("click", () => onTool({ kind: "place", id: "ResidentialHut" }));
+btnPlaceStall.addEventListener("click", () => onTool({ kind: "place", id: "MarketStall" }));
 
   brush.addEventListener("input", () => onBrush(parseInt(brush.value)));
 

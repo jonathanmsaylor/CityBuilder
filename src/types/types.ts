@@ -7,7 +7,9 @@ export enum ZoneId {
 
 export type Tool =
   | { kind: "paint"; zone: ZoneId }
-  | { kind: "erase" };
+  | { kind: "erase" }
+  | { kind: "place"; id: "ResidentialHut" | "MarketStall" };
+
 
 export interface ZoneDef {
   id: ZoneId;

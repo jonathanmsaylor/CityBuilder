@@ -17,6 +17,8 @@ import { SaveLoad } from "./SaveLoad";
 import { Input } from "./Input";
 import { CameraRig } from "./CameraRig";
 import { Tool, ZoneId } from "../types/types";
+import { Placement } from "./Placement";
+import { BUILDINGS } from "./Buildings";
 
 export class App {
   private root: HTMLElement;
@@ -24,6 +26,7 @@ export class App {
   private renderer: WebGLRenderer;
   private raycaster = new Raycaster();
   private pointerNDC = new Vector2();
+private placement: Placement;
 
   private rig: CameraRig;
   private grid: Grid;
@@ -42,59 +45,84 @@ constructor(root: HTMLElement) {
   this.root = root;
 
   this.scene = new Scene();
-  // Blue sky background
+  // keep your current sky if you changed it earlier
   this.scene.background = new Color(0x87ceeb);
 
   this.renderer = new WebGLRenderer({ antialias: false, alpha: false });
   this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   this.renderer.setSize(window.innerWidth, window.innerHeight);
-  // Ensure clear color matches the sky, so edges don't show dark
   this.renderer.setClearColor(0x87ceeb, 1);
   this.root.appendChild(this.renderer.domElement);
 
   this.rig = new CameraRig(window.innerWidth / window.innerHeight);
   this.rig.setViewportHeight(window.innerHeight);
 
-  // Ground plane (centered), now a bright grass tone
+  // Ground + overlay (unchanged from your current version)
   const grid = (this.grid = new Grid(128, 128));
   const geom = new PlaneGeometry(grid.width, grid.height, 1, 1);
   geom.rotateX(-Math.PI / 2);
   const mat = new MeshStandardMaterial({
-    color: new Color("#5ec46e"), // pretty grass green
+    color: new Color("#5ec46e"),
     roughness: 0.95,
     metalness: 0.0,
   });
   this.ground = new Mesh(geom, mat);
   this.scene.add(this.ground);
 
-  // Zoning overlay just above ground
   this.overlay = new Overlay(grid);
-  this.scene.add(this.overlay.mesh);
 
-  // Brighter ambient to pop colors
+  this.scene.add(this.overlay.mesh);
+this.placement = new Placement(this.grid, this.scene);
+
   const amb = new AmbientLight(0xffffff, 1.0);
   this.scene.add(amb);
 
-  // Paint + Save/Load
+  // Services
   this.paint = new PaintService(grid, this.overlay);
   this.paint.setRadius(this.brushRadius);
   this.saveLoad = new SaveLoad(grid);
 
-  // Input wiring
+  // Pointer input (mobile gestures)
   new Input(this.renderer.domElement, {
     onSingleStart: (p) => this.onSingleStart(p.x, p.y),
     onSingleMove: (p) => this.onSingleMove(p.x, p.y),
     onSingleEnd: () => this.onSingleEnd(),
     onDualStart: () => {},
     onDualMove: (p1, p2) => this.onDualMove(p1.x, p1.y, p2.x, p2.y),
-    onDualEnd: () => { this._prevDual = null; },
+    onDualEnd: () => {
+      this._prevDual = null;
+    },
   });
+
+  // Keyboard input (DEV): listen on window
+  window.addEventListener("keydown", this.onKeyDown);
+  window.addEventListener("keyup", this.onKeyUp);
 
   window.addEventListener("resize", () => this.onResize());
   this.onResize();
 
   this.animate();
+  // Mouse wheel zoom (DEV)
+this.renderer.domElement.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const zoomScale = e.deltaY < 0 ? 0.9 : 1.1; // scroll up = zoom in, scroll down = zoom out
+  this.rig.zoomBy(zoomScale);
+}, { passive: false });
+
 }
+
+private onKeyDown = (e: KeyboardEvent) => {
+  // Avoid hijacking input fields
+  const tag = (e.target as HTMLElement)?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+  this.keys.add(e.code);
+};
+private keys = new Set<string>();
+private _lastTime: number | undefined;
+
+private onKeyUp = (e: KeyboardEvent) => {
+  this.keys.delete(e.code);
+};
 
 
   setTool(tool: Tool) {
@@ -146,15 +174,25 @@ private screenToTile(sx: number, sy: number) {
 
 
 
-  private onSingleStart(sx: number, sy: number) {
-    if (this.tool.kind === "paint" || this.tool.kind === "erase") {
-      const tile = this.screenToTile(sx, sy);
-      if (!tile) return;
-      const zone = this.tool.kind === "erase" ? ZoneId.Empty : this.tool.zone;
-      this.paint.strokeLine(tile.x, tile.y, tile.x, tile.y, zone);
-      this.lastTile = tile;
-    }
+private onSingleStart(sx: number, sy: number) {
+  const tile = this.screenToTile(sx, sy);
+  if (!tile) return;
+
+  if (this.tool.kind === "paint" || this.tool.kind === "erase") {
+    const zone = this.tool.kind === "erase" ? ZoneId.Empty : this.tool.zone;
+    this.paint.strokeLine(tile.x, tile.y, tile.x, tile.y, zone);
+    this.lastTile = tile;
+    return;
   }
+
+  if (this.tool.kind === "place") {
+    // one-tap placement; if invalid, do nothing (we can add a red preview later)
+    this.placement.tryPlace(this.tool.id, tile.x, tile.y);
+    this.lastTile = null;
+    return;
+  }
+}
+
 
   private onSingleMove(sx: number, sy: number) {
     if (!this.lastTile) return;
@@ -193,8 +231,50 @@ private screenToTile(sx: number, sy: number) {
   }
   private _prevDual: { cx: number; cy: number; d: number } | null = null;
 
-  private animate = () => {
-    this.renderer.render(this.scene, this.rig.camera);
-    requestAnimationFrame(this.animate);
-  };
+private animate = (time?: number) => {
+  // time is from rAF; fall back if undefined
+  const now = time ?? performance.now();
+  if (this._lastTime === undefined) this._lastTime = now;
+  const dt = (now - this._lastTime) / 1000; // seconds
+  this._lastTime = now;
+
+  // Keyboard camera controls
+  this.updateKeyboard(dt);
+
+  this.renderer.render(this.scene, this.rig.camera);
+  requestAnimationFrame(this.animate);
+};
+private updateKeyboard(dt: number) {
+  if (!this.keys || this.keys.size === 0) return;
+
+  // Pan speed in screen pixels per second (converted by rig to world units)
+  const basePxPerSec = 800;
+  const fast = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
+  const px = basePxPerSec * (fast ? 1.8 : 1.0) * dt;
+
+  let dx = 0;
+  let dy = 0;
+
+  // WASD / Arrow Keys
+  if (this.keys.has("ArrowLeft") || this.keys.has("KeyA")) dx += px;   // left key → world pans left
+  if (this.keys.has("ArrowRight") || this.keys.has("KeyD")) dx -= px;  // right key → world pans right
+  if (this.keys.has("ArrowUp") || this.keys.has("KeyW")) dy += px;     // up key → world moves up
+  if (this.keys.has("ArrowDown") || this.keys.has("KeyS")) dy -= px;   // down key → world moves down
+
+  if (dx !== 0 || dy !== 0) {
+    this.rig.panByScreenDelta(dx, dy);
+  }
+
+  // Zoom keys: Q/E or -/=
+  const zoomIn = this.keys.has("Equal") || this.keys.has("NumpadAdd") || this.keys.has("KeyE");
+  const zoomOut = this.keys.has("Minus") || this.keys.has("NumpadSubtract") || this.keys.has("KeyQ");
+
+  if (zoomIn || zoomOut) {
+    const perFrame = zoomIn ? 0.985 : 1.015; // <1 = in, >1 = out
+    const scale = Math.pow(perFrame, dt * 60);
+    this.rig.zoomBy(scale);
+  }
+}
+
+
 }
