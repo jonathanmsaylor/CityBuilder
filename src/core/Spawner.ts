@@ -1,17 +1,16 @@
+// src/core/Spawner.ts
 import { Grid } from "./Grid";
 import { Placement } from "./Placement";
 import { ZoneId } from "../types/types";
 import { BUILDINGS, BuildingId } from "./Buildings";
+import { Resources } from "./Resources";
 
 type Job = {
   x0: number; y0: number; x1: number; y1: number;
-  idleTicks: number;       // consecutive ticks with no placement
+  idleTicks: number; // consecutive ticks with no placement
 };
 
 export class Spawner {
-  private grid: Grid;
-  private placement: Placement;
-
   private queue: Job[] = [];
   private timer = 0;
 
@@ -33,12 +32,14 @@ export class Spawner {
     [ZoneId.Residential]: "ResidentialHut",
     [ZoneId.Market]: "MarketStall",
     [ZoneId.Road]: null,
+    [ZoneId.Agriculture]: null, // farms are player-placed, not auto-spawned
   };
 
-  constructor(grid: Grid, placement: Placement) {
-    this.grid = grid;
-    this.placement = placement;
-  }
+  constructor(
+    private grid: Grid,
+    private placement: Placement,
+    private resources?: Resources, // optional gate
+  ) {}
 
   /** Merge a new rect into the queue; keep it alive until it’s truly full. */
   enqueueRect(x0: number, y0: number, x1: number, y1: number) {
@@ -48,7 +49,6 @@ export class Spawner {
     x1 = Math.max(0, Math.min(w - 1, Math.max(x0, x1)));
     y1 = Math.max(0, Math.min(h - 1, Math.max(y0, y1)));
 
-    // Try to expand an overlapping job instead of adding duplicates.
     for (const j of this.queue) {
       const ox0 = Math.max(j.x0, x0), oy0 = Math.max(j.y0, y0);
       const ox1 = Math.min(j.x1, x1), oy1 = Math.min(j.y1, y1);
@@ -57,7 +57,7 @@ export class Spawner {
         j.y0 = Math.min(j.y0, y0);
         j.x1 = Math.max(j.x1, x1);
         j.y1 = Math.max(j.y1, y1);
-        j.idleTicks = 0; // fresh paint → try again soon
+        j.idleTicks = 0;
         return;
       }
     }
@@ -83,8 +83,12 @@ export class Spawner {
       const bId = this.zoneToBuilding[zid];
       if (!bId) continue;
 
+      // Food gate: only allow new huts if resources permit
+      if (bId === "ResidentialHut" && this.resources && !this.resources.canSpawnNewHut()) {
+        continue;
+      }
+
       const bp = BUILDINGS[bId];
-      // Try to center footprint roughly on (tx, ty)
       const ox = tx - (bp.w >> 1);
       const oy = ty - (bp.h >> 1);
 
@@ -98,15 +102,10 @@ export class Spawner {
 
     if (placed) {
       job.idleTicks = 0;
-      // Keep job so it continues filling until no space remains.
       this.queue.push(job);
     } else {
       job.idleTicks++;
-      if (job.idleTicks < this.maxIdleTicks) {
-        // Still might have room we didn't hit randomly — try again later.
-        this.queue.push(job);
-      }
-      // else: retire the job as "full" (no re-enqueue)
+      if (job.idleTicks < this.maxIdleTicks) this.queue.push(job);
     }
   }
 }

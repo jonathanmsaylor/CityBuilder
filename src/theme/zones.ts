@@ -1,13 +1,12 @@
 // src/theme/zones.ts
 import { ZoneId, ZoneRegistry } from "../types/types";
 
-// Return byte RGBA
 function hexToRGBA(hex: string, a = 96) {
   const m = hex.replace("#", "");
   const r = parseInt(m.slice(0, 2), 16);
   const g = parseInt(m.slice(2, 4), 16);
   const b = parseInt(m.slice(4, 6), 16);
-  return { r, g, b, a };
+  return { r, g, b, a }; // 0..255 bytes
 }
 
 // Simple, slightly transparent tints (no special effects)
@@ -31,5 +30,10 @@ export const ZONES: ZoneRegistry = {
     id: ZoneId.Road,
     name: "Road",
     color: hexToRGBA("#A3A3A3", 64), // gentle gray
+  },
+  [ZoneId.Agriculture]: {
+    id: ZoneId.Agriculture,
+    name: "Agriculture",
+    color: hexToRGBA("#18E0D6", 90), // teal/cyan, slightly translucent
   },
 };

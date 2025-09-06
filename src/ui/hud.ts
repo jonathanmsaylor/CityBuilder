@@ -1,78 +1,61 @@
-import { Tool, ZoneId } from "../types/types";
+// src/ui/hud.ts
+import { App } from "../core/App";
+import { ZoneId } from "../types/types";
 
-export function createHUD() {
-  const root = document.createElement("div");
-  root.className = "hud-root";
+export function initHUD(app: App) {
+  let root = document.getElementById("hud");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "hud";
+    document.body.appendChild(root);
+  }
+  root.className = "hud";
 
-  const toolGroup = document.createElement("div");
-  toolGroup.className = "tool-group";
+  root.innerHTML = `
+    <div class="bar">
+      <button id="paint-res">Res</button>
+      <button id="paint-mkt">Mkt</button>
+      <button id="paint-agr">Agri</button>
+      <button id="erase">Erase</button>
+      <span class="sep"></span>
+      <button id="place-farm">Farm</button>
+      <span class="sep"></span>
+      <button id="save">Save</button>
+      <button id="load">Load</button>
+    </div>
+    <div class="stats">
+      <span id="rations">Rations: 0.0</span>
+      <span id="pop">Pop: 0</span>
+    </div>
+  `;
 
-  const btnRes = mkButton("Residential", "res");
-  const btnMkt = mkButton("Market", "mkt");
-  const btnRoad = mkButton("Road", "road");
-  const btnErase = mkButton("Eraser", "eraser");
-const btnPlaceHut = mkButton("Place Hut", "phut");
-const btnPlaceStall = mkButton("Place Stall", "pstall");
+  (document.getElementById("paint-res")!).onclick = () =>
+    app.setTool({ kind: "paint", zone: ZoneId.Residential });
+  (document.getElementById("paint-mkt")!).onclick = () =>
+    app.setTool({ kind: "paint", zone: ZoneId.Market });
+  (document.getElementById("paint-agr")!).onclick = () =>
+    app.setTool({ kind: "paint", zone: ZoneId.Agriculture });
+  (document.getElementById("erase")!).onclick = () =>
+    app.setTool({ kind: "erase" });
 
-toolGroup.append(btnRes, btnMkt, btnRoad, btnErase, btnPlaceHut, btnPlaceStall);
+  (document.getElementById("place-farm")!).onclick = () =>
+    app.setTool({ kind: "place", id: "HydroponicsFarm" });
 
-  const brushWrap = document.createElement("div");
-  brushWrap.className = "brush-wrap";
-  const brushLabel = document.createElement("label");
-  brushLabel.textContent = "Brush";
-  const brush = document.createElement("input");
-  brush.type = "range";
-  brush.min = "1";
-  brush.max = "12";
-  brush.value = "2";
-  brushWrap.append(brushLabel, brush);
+  (document.getElementById("save")!).onclick = () => app.save();
+  (document.getElementById("load")!).onclick = () => app.load();
 
-  const saveLoad = document.createElement("div");
-  saveLoad.className = "save-load";
-  const btnSave = mkButton("Save", "save");
-  const btnLoad = mkButton("Load", "load");
-  saveLoad.append(btnSave, btnLoad);
-
-  root.append(toolGroup, brushWrap, saveLoad);
-
-  let onTool = (t: Tool) => {};
-  let onBrush = (r: number) => {};
-  let onSave = () => {};
-  let onLoad = () => {};
-
-  btnRes.addEventListener("click", () => onTool({ kind: "paint", zone: ZoneId.Residential }));
-  btnMkt.addEventListener("click", () => onTool({ kind: "paint", zone: ZoneId.Market }));
-  btnRoad.addEventListener("click", () => onTool({ kind: "paint", zone: ZoneId.Road }));
-  btnErase.addEventListener("click", () => onTool({ kind: "erase" }));
-btnPlaceHut.addEventListener("click", () => onTool({ kind: "place", id: "ResidentialHut" }));
-btnPlaceStall.addEventListener("click", () => onTool({ kind: "place", id: "MarketStall" }));
-
-  brush.addEventListener("input", () => onBrush(parseInt(brush.value)));
-
-  btnSave.addEventListener("click", () => onSave());
-  btnLoad.addEventListener("click", () => onLoad());
-
-  return {
-    root,
-    onSelectTool(fn: (t: Tool) => void) {
-      onTool = fn;
-    },
-    onBrushChange(fn: (r: number) => void) {
-      onBrush = fn;
-    },
-    onSave(fn: () => void) {
-      onSave = fn;
-    },
-    onLoad(fn: () => void) {
-      onLoad = fn;
-    },
-  };
-}
-
-function mkButton(label: string, key: string) {
-  const b = document.createElement("button");
-  b.className = "btn";
-  b.dataset.key = key;
-  b.textContent = label;
-  return b;
+  // Throttled updater (every ~200ms)
+  let acc = 0;
+  function tick(time: number) {
+    acc += 16;
+    if (acc >= 200) {
+      acc = 0;
+      const r = document.getElementById("rations")!;
+      const p = document.getElementById("pop")!;
+      r.textContent = `Rations: ${app.getRations().toFixed(1)}`;
+      p.textContent = `Pop: ${app.getPopulation()}`;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 }

@@ -1,25 +1,24 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
-    />
-    <title>City Builder — Paint to Zone</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>City Builder</title>
+    <!-- HUD styling -->
+    <link rel="stylesheet" href="/src/ui/hud.css" />
     <style>
-      html,
-      body,
-      #app {
-        height: 100%;
-        width: 100%;
+      html, body {
         margin: 0;
+        padding: 0;
+        height: 100%;
         overflow: hidden;
-        background: #0a0f17;
+        background: #000;
       }
-      canvas {
+      #app {
+        width: 100%;
+        height: 100%;
         display: block;
-        touch-action: none; /* critical for mobile gestures */
+        touch-action: none; /* important to prevent pinch/scroll conflicts */
       }
     </style>
   </head>

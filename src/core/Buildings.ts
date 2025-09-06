@@ -1,50 +1,51 @@
-import { Color, Mesh, MeshStandardMaterial, BoxGeometry } from "three";
+// src/core/Buildings.ts
+import {
+  BoxGeometry,
+  Mesh,
+  MeshStandardMaterial,
+} from "three";
 import { ZoneId } from "../types/types";
 
-export type BuildingId = "ResidentialHut" | "MarketStall";
+export type BuildingId = "ResidentialHut" | "MarketStall" | "HydroponicsFarm";
 
 export interface BuildingBlueprint {
   id: BuildingId;
-  name: string;
-  // footprint in tiles (width x height)
-  w: number;
-  h: number;
-  // tiles must be one of these zone IDs
+  w: number;         // footprint in tiles (width)
+  h: number;         // footprint in tiles (height)
+  height: number;    // visual height (world units)
   allowedZones: ZoneId[];
-  // simple color for the mesh (placeholder art)
-  color: number;
-  // height in world units (visual only)
-  height: number;
+  color: number;     // mesh tint for quick visual
 }
 
 export const BUILDINGS: Record<BuildingId, BuildingBlueprint> = {
   ResidentialHut: {
     id: "ResidentialHut",
-    name: "Hut",
-    w: 2,
-    h: 2,
+    w: 2, h: 2,
+    height: 1.6,
     allowedZones: [ZoneId.Residential],
-    color: 0xf4b183, // warm clay
-    height: 1,
+    color: 0x8fd17d,
   },
   MarketStall: {
     id: "MarketStall",
-    name: "Stall",
-    w: 2,
-    h: 2,
+    w: 2, h: 1,
+    height: 1.2,
     allowedZones: [ZoneId.Market],
-    color: 0x8ab4f8, // cool canvas
-    height: 0.8,
+    color: 0xd0a85f,
+  },
+  HydroponicsFarm: {
+    id: "HydroponicsFarm",
+    w: 3, h: 3,
+    height: 1.2,
+    allowedZones: [ZoneId.Agriculture], // enforce Agri zone
+    color: 0x22d1ff, // sci-fi cyan
   },
 };
 
-// tiny helper to make a simple placeholder mesh for a placed building
+/** Simple box mesh placeholder for all buildings (fast + readable). */
 export function makeBuildingMesh(bp: BuildingBlueprint): Mesh {
-  const geo = new BoxGeometry(bp.w, bp.height, bp.h);
-  const mat = new MeshStandardMaterial({
-    color: new Color(bp.color),
-    roughness: 0.9,
-    metalness: 0.0,
-  });
-  return new Mesh(geo, mat);
+  const geom = new BoxGeometry(bp.w, bp.height, bp.h);
+  const mat = new MeshStandardMaterial({ color: bp.color, roughness: 0.8, metalness: 0.05 });
+  const mesh = new Mesh(geom, mat);
+  // footprint center to world: App/Placement handles position; we just tag data.
+  return mesh;
 }
