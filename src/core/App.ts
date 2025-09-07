@@ -40,6 +40,9 @@ private cancelPendingPaint() {
   }
   this.pendingStartTile = null;
 }
+isOverlayVisible() { return this.overlay.isVisible(); }
+setOverlayVisible(v: boolean) { this.overlay.setVisible(v); }
+toggleOverlayVisible() { this.overlay.setVisible(!this.overlay.isVisible()); }
 
   private rig: CameraRig;
   private grid: Grid;

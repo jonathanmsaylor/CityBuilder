@@ -1,42 +1,67 @@
-/* src/ui/hud.css */
+/* src/ui/hud.css — compact, wraps nicely, with collapse option */
 .hud {
   position: fixed;
   top: 8px;
   left: 8px;
   right: 8px;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  user-select: none;
   z-index: 10;
+  pointer-events: auto;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
 .hud .bar {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  background: rgba(20, 20, 24, 0.55);
-  padding: 6px 8px;
-  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(6px);
+  border-radius: 12px;
+  padding: 6px;
 }
 
-.hud .bar button {
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 0;
+.hud .row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;          /* <-- wraps on narrow screens */
 }
 
-.hud .bar .sep {
-  width: 1px;
-  background: rgba(255,255,255,0.2);
-  margin: 0 4px;
-}
-
-.hud .stats {
-  display: inline-flex;
-  gap: 12px;
-  margin-left: 12px;
-  padding: 6px 8px;
-  background: rgba(20, 20, 24, 0.35);
+.hud .hud-btn {
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 10px;
   border-radius: 10px;
+  border: 0;
   color: #fff;
-  font-weight: 600;
+  background: rgba(30, 30, 35, 0.7);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.25);
 }
+.hud .hud-btn:hover { background: rgba(40, 40, 45, 0.8); }
+.hud .sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 1px;
+  margin: 0 2px;
+}
+
+.hud .stats .pill {
+  font-size: 12px;
+  color: #fff;
+  background: rgba(30, 30, 35, 0.6);
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+
+.hud .hud-fab {
+  margin-left: auto;
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 0;
+  color: #fff;
+  background: rgba(30, 30, 35, 0.75);
+}
+
+/* Collapsed: hide tool row, keep stats + toggle visible */
+.hud.collapsed .row.tools { display: none; }

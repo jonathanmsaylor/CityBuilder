@@ -1,5 +1,5 @@
 // src/ui/hud.ts
-// UPDATED: add "Workers: A/B"
+// Compact HUD with collapse + zones visibility toggle
 import { App } from "../core/App";
 import { ZoneId } from "../types/types";
 
@@ -14,45 +14,79 @@ export function initHUD(app: App) {
 
   root.innerHTML = `
     <div class="bar">
-      <button id="paint-res">Res</button>
-      <button id="paint-mkt">Mkt</button>
-      <button id="paint-agr">Agri</button>
-      <button id="erase">Erase</button>
-      <span class="sep"></span>
-      <button id="place-farm">Farm</button>
-      <span class="sep"></span>
-      <button id="save">Save</button>
-      <button id="load">Load</button>
-    </div>
-    <div class="stats">
-      <span id="rations">Rations: 0.0</span>
-      <span id="pop">Pop: 0</span>
-      <span id="workers">Workers: 0/0</span>
+      <div class="row tools">
+        <button id="paint-res" class="hud-btn">Res</button>
+        <button id="paint-mkt" class="hud-btn">Mkt</button>
+        <button id="paint-agr" class="hud-btn">Agri</button>
+        <button id="erase"     class="hud-btn">Erase</button>
+        <span class="sep"></span>
+        <button id="place-farm" class="hud-btn">Farm</button>
+        <span class="sep"></span>
+        <button id="save" class="hud-btn">Save</button>
+        <button id="load" class="hud-btn">Load</button>
+        <span class="sep"></span>
+        <button id="toggle-zones" class="hud-btn">Hide Zones</button>
+      </div>
+
+      <div class="row stats">
+        <span id="rations" class="pill">Rations: 0.0</span>
+        <span id="pop"     class="pill">Pop: 0</span>
+        <span id="workers" class="pill">Workers: 0/0</span>
+        <button id="hud-toggle" class="hud-fab" title="Collapse/Expand HUD">☰</button>
+      </div>
     </div>
   `;
 
-  (document.getElementById("paint-res")!).onclick = () =>
+  // Restore collapsed state
+  if (localStorage.getItem("hud_collapsed") === "1") {
+    root.classList.add("collapsed");
+  }
+
+  // --- tool buttons ---
+  (document.getElementById("paint-res") as HTMLButtonElement).onclick = () =>
     app.setTool({ kind: "paint", zone: ZoneId.Residential });
-  (document.getElementById("paint-mkt")!).onclick = () =>
+  (document.getElementById("paint-mkt") as HTMLButtonElement).onclick = () =>
     app.setTool({ kind: "paint", zone: ZoneId.Market });
-  (document.getElementById("paint-agr")!).onclick = () =>
+  (document.getElementById("paint-agr") as HTMLButtonElement).onclick = () =>
     app.setTool({ kind: "paint", zone: ZoneId.Agriculture });
-  (document.getElementById("erase")!).onclick = () =>
+  (document.getElementById("erase") as HTMLButtonElement).onclick = () =>
     app.setTool({ kind: "erase" });
 
-  (document.getElementById("place-farm")!).onclick = () =>
+  (document.getElementById("place-farm") as HTMLButtonElement).onclick = () =>
     app.setTool({ kind: "place", id: "HydroponicsFarm" });
 
-  (document.getElementById("save")!).onclick = () => app.save();
-  (document.getElementById("load")!).onclick = () => app.load();
+  (document.getElementById("save") as HTMLButtonElement).onclick = () => app.save();
+  (document.getElementById("load") as HTMLButtonElement).onclick = () => app.load();
 
-  // Throttled updater (every ~200ms)
+  // --- zones toggle button ---
+  const zonesBtn = document.getElementById("toggle-zones") as HTMLButtonElement;
+  const refreshZonesLabel = () => {
+    zonesBtn.textContent = app.isOverlayVisible() ? "Hide Zones" : "Show Zones";
+  };
+  refreshZonesLabel();
+  zonesBtn.onclick = () => {
+    app.toggleOverlayVisible();     // toggles visibility
+    refreshZonesLabel();            // update label
+  };
+
+  // --- collapse/expand HUD ---
+  (document.getElementById("hud-toggle") as HTMLButtonElement).onclick = () => {
+    root!.classList.toggle("collapsed");
+    localStorage.setItem(
+      "hud_collapsed",
+      root!.classList.contains("collapsed") ? "1" : "0"
+    );
+  };
+
+  // --- Throttled updater (every ~200ms) ---
   let last = 0;
   function tick(ts: number) {
     if (ts - last >= 200) {
       last = ts;
-      (document.getElementById("rations")!).textContent = `Rations: ${app.getRations().toFixed(1)}`;
-      (document.getElementById("pop")!).textContent = `Pop: ${app.getPopulation()}`;
+      (document.getElementById("rations")!).textContent =
+        `Rations: ${app.getRations().toFixed(1)}`;
+      (document.getElementById("pop")!).textContent =
+        `Pop: ${app.getPopulation()}`;
       (document.getElementById("workers")!).textContent =
         `Workers: ${app.getWorkersAssigned()}/${app.getWorkersNeeded()}`;
     }

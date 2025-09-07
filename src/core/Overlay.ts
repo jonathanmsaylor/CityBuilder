@@ -62,6 +62,12 @@ eraseSoftDisc(
 
   this.markDirtyRows(y0, y1);
 }
+setVisible(visible: boolean) {
+  this.mesh.visible = !!visible;
+}
+isVisible(): boolean {
+  return this.mesh.visible;
+}
 
   // Hi-res (supersampled) RGBA buffer
   private data: Uint8Array;
